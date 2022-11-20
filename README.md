@@ -49,8 +49,7 @@ Dans le cas du 3ème type, la syntaxe est libre. En revanche, dans le second cas
   - le serveur donne au joueur la liste des cartes du joueur, le score correspondant ainsi que la première carte du donneur. Il attend ensuite de savoir si le joueur veut une carte supplémentaire. Cela peut se faire en plusieurs messages et se termine par la commande '.'
   - le joueur répond par la commande MORE suivie de 1 pour une carte, 0 sinon.
   - ces étapes sont répétées jusqu'à ce que le joueur s'arrête
-  - si le joueur a dépassé 21, le serveur lui donne le résultat.
-  Une fois que tous les joueurs ont joué, le serveur choisit lui même de prendre des cartes tant qu'il n'a pas atteint au moins 17. Il annonce ensuite le résultat à chaque joueur :
+  - si le joueur a dépassé 21, le serveur lui donne le résultat. Une fois que tous les joueurs ont joué, le serveur choisit lui même de prendre des cartes tant qu'il n'a pas atteint au moins 17. Il annonce ensuite le résultat à chaque joueur :
   - le serveur envoie ses cartes et son score ainsi que le résultat puis termine avec la commande END
   - le serveur ferme la connexion avec le joueur
   Le serveur supprime finalement la table.

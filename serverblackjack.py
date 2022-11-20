@@ -2,13 +2,44 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import time
+import random
+
+#class player
+class Player:
+    writer = "" 
+    deck = []
+
+    def __init__(self, writer):
+        self.writer = writer
+
+    def add_card(self, card):
+        self.deck.append(card)
+    
+    def get_writer(self):
+        return self.writer
+    
+    def get_deck(self,):
+        return self.deck
+
+#class dealer
+class Dealer:
+    deck = []
+
+    def add_card(self, card):
+        self.deck.append(card)
+    
+    def get_deck(self,):
+        return self.deck
 
 # Class Table
 class Table:
     name = ""
     wait_time = 0
     is_start = False
-    player = []
+    players = []
+    cards = []
+    dealer = Dealer()
 
     # init method or constructor
     def __init__(self, name):
@@ -18,7 +49,13 @@ class Table:
         self.wait_time = time
     
     def start_game(self):
+        time.sleep(int(self.get_wait_time()))
+        print('Lancement de la partie.')
         self.is_start = True
+        self.cards = generation_deck()
+        for player in self.players:
+            self.give_card(player, 2)
+        self.give_card(self.dealer, 2)
 
     def get_name(self):
         return self.name
@@ -30,7 +67,22 @@ class Table:
         return self.is_start
     
     def add_player(self, player):
-        self.player.append(player)
+        self.players.append(player)
+    
+    def get_players(self):
+        return self.players
+    
+    def set_cards(self, cards):
+        self.cards = cards
+    
+    def give_card(self, player, nb):
+        for i in range(nb) :
+            rdm = random.randrange(0, len(self.cards))
+            player.add_card(self.cards[rdm])
+            self.cards.remove(self.cards[rdm])
+
+    def get_dealer(self):
+        return self.dealer
 
 # Class Carte
 class Card:
@@ -53,11 +105,14 @@ class Card:
     def set_name(self, name):
         self.name = name
 
-    def get_couleur(self):
+    def get_color(self):
         if self.symbol == "Carreaux" or self.symbol == "Cœurs" :
             return "red"
         else:
             return "black"
+    
+    def to_string(self):
+        return self.name+" "+self.symbol
 
 def generation_deck():
     
@@ -66,10 +121,8 @@ def generation_deck():
     symbols = ["Pique", "Carreau", "Cœur", "Trèfle"]
     names = ["As", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Valet", "Dame", "Roi"]
 
-    i = 0
     for symbol in symbols:
         for name in names:
-            i += 1
             tempCard = Card(symbol, name)
             cards.append(tempCard)
     return cards
@@ -80,8 +133,17 @@ tables = [] # Un tableau de partie
 #Un tableau de joueurs
 #Un tableau de croupiers
 
+async def view_deck(writer, table):
+    for player in table.get_players():
+        if player.get_writer() == writer:
+            for card in player.get_deck():
+                msg = card.to_string()
+                writer.write(f"{msg}\n".encode())
+                await writer.drain()
+                #print(card.get_symbol()+" "+card.get_name())
+            
 
-async def forward(writer, addr, msg):
+async def forward(writer, msg):
     for user in users:
         if user == writer:
             user.write(f"{msg}\n".encode())
@@ -94,7 +156,7 @@ async def handle_request_joueur(reader, writer):
     
     message = f"Player {addr} is connected."
     print(message)
-    await forward(writer, addr, "Bienvenue")
+    await forward(writer, "Bienvenue")
 
     while True:
         data = await reader.readline()
@@ -113,18 +175,19 @@ async def handle_request_joueur(reader, writer):
         if message.startswith('NAME'):
             if len(tables) == 0 :
                 data = b"END"
-                await forward(writer, addr, "END")
+                await forward(writer, "END")
             else :
                 for table in tables:
-                    print("---Choice game---")
                     if table.get_name() == message.replace('NAME ','') and table.get_is_start() == False:
-                        table.add_player(writer)
-                        asyncio.sleep(table.get_wait_time())
+                        table.add_player(Player(writer))
                         table.start_game()
-                        print(len(generation_deck()))
+                        print("test")
+                        await forward(writer, "START")
+                        await view_deck(writer,table)
+                        await forward(writer, "Carte du donneur : "+table.get_dealer().get_deck()[0].to_string())
                     else:
                         data = b"END"
-                        await forward(writer, addr, "END")
+                        await forward(writer, "END")
                         break
             message = data.decode().strip()
 
@@ -132,13 +195,12 @@ async def handle_request_joueur(reader, writer):
         if message == "END":
             message = f"Player {addr} quit."
             print(message)
-            await forward(writer, "Server", "END")
             users.remove(writer)
             writer.close()
             break
         
-        print(message)
-        await forward(writer, addr, message)
+        #print(message)
+        #await forward(writer, message)
 
 
 # Gestion croupiers
@@ -148,7 +210,7 @@ async def handle_request_croupier(reader, writer):
     
     message = f"Dealer {addr} is connected."
     print(message)
-    await forward(writer, addr, "Bienvenue")
+    await forward(writer, "Bienvenue")
 
     while True:
         data = await reader.readline()
@@ -161,7 +223,7 @@ async def handle_request_croupier(reader, writer):
         if message == "END":
             message = f"Dealer {addr} quit."
             print(message)
-            await forward(writer, "Server", message)
+            await forward(writer, message)
             users.remove(writer)
             writer.close()
             break
@@ -181,7 +243,7 @@ async def handle_request_croupier(reader, writer):
             for table in tables:
                 print(table.get_name(), table.get_wait_time())
 
-        await forward(writer, addr, '')
+        await forward(writer, '')
 
 
 async def blackjack_server():
