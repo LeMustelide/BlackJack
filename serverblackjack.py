@@ -84,6 +84,11 @@ class Table:
     def get_dealer(self):
         return self.dealer
 
+    def get_players_by_writter(self, writter):
+        for player in self.players:
+            if player.get_writer() == writter:
+                return player
+
 # Class Carte
 class Card:
     symbol = ""
@@ -141,6 +146,8 @@ async def view_deck(writer, table):
                 writer.write(f"{msg}\n".encode())
                 await writer.drain()
                 #print(card.get_symbol()+" "+card.get_name())
+
+
             
 
 async def forward(writer, msg):
@@ -185,12 +192,14 @@ async def handle_request_joueur(reader, writer):
                         await forward(writer, "START")
                         await view_deck(writer,table)
                         await forward(writer, "Carte du donneur : "+table.get_dealer().get_deck()[0].to_string())
+                        await forward(writer, ".")
                     else:
                         data = b"END"
                         await forward(writer, "END")
                         break
-            message = data.decode().strip()
-
+        if message == "MORE":
+            player = table.get_players_by_writter(writer)
+            table.give_card(player, 1)
         # quit
         if message == "END":
             message = f"Player {addr} quit."
