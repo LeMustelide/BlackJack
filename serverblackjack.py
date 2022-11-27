@@ -122,6 +122,11 @@ class Table:
     def get_dealer(self):
         return self.dealer
 
+    def get_players_by_writter(self, writter):
+        for player in self.players:
+            if player.get_writer() == writter:
+                return player
+
 # Class Carte
 class Card:
     symbol = ""
@@ -264,7 +269,6 @@ async def handle_request_joueur(reader, writer):
                         data = b"END"
                         await forward(writer, "END")
                         break
-
         # quit
         if message == "END":
             message = f"Player {addr} quit."
