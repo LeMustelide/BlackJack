@@ -23,6 +23,9 @@ class Player:
     def get_deck(self):
         return self.deck
 
+    def set_deck(self):
+        self.deck = []
+
     def get_id(self):
         return self.id
 
@@ -50,6 +53,27 @@ class Dealer:
 
     def get_deck(self):
         return self.deck
+        
+    def get_score(self):
+        sum = 0
+        buffer = 0
+        for card in self.deck: 
+            if card.get_score() != 1:
+                sum += card.get_score()
+            else:
+                buffer += 1
+        for i in range(buffer):
+            if sum <= 10:
+                sum += 11
+            else:
+                sum += 1
+        return sum
+    
+    def deck_to_string(self):
+        deck_string = ""
+        for card in self.deck:
+            deck_string += str(card.to_string()) + ", "
+        return deck_string
 
 # Class Table
 class Table:
@@ -65,6 +89,8 @@ class Table:
     # init method or constructor
     def __init__(self, name):
         self.name = name
+        self.players_finished = 0
+        self.players = []
 
     def set_time(self, time):
         self.wait_time = time
@@ -77,10 +103,10 @@ class Table:
         print("Lancement de la partie.")
         self.is_start = True
         self.cards = generation_deck()
-        for player in self.players:
-            print('don carte !!!!'+str(player.get_id()))
-            self.give_card(player, 2)
         self.give_card(self.dealer, 2)
+        for player in self.players:
+            player.set_deck()
+            self.give_card(player, 2)
 
     def get_is_waiting(self):
         return self.waiting
@@ -114,7 +140,6 @@ class Table:
 
     def give_card(self, player, nb):
         for i in range(nb):
-            print(str(i))
             rdm = random.randrange(0, len(self.cards))
             player.add_card(self.cards[rdm])
             self.cards.remove(self.cards[rdm])
@@ -163,9 +188,7 @@ class Card:
         return self.score
 
 def generation_deck():
-
     cards = []
-
     symbols = ["Pique", "Carreau", "Cœur", "Trèfle"]
     names = ["As", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Valet", "Dame", "Roi"]
     scores = [1,2,3,4,5,6,7,8,9,10,10,10,10]
@@ -178,18 +201,13 @@ def generation_deck():
         i = 0
     return cards
 
-
 users = []  # empty list of connected users
 tables = []  # Un tableau de partie
-
-# Un tableau de joueurs
-# Un tableau de croupiers
-
 
 async def view_deck(player):
     for card in player.get_deck():
         msg = card.to_string()
-        await forward(player.get_writer(), str(player.get_id())+" "+msg)
+        await forward(player.get_writer(), msg)
     await forward(player.get_writer(), "Score total : "+ str(player.get_score()))
 
 async def forward(writer, msg):
@@ -226,11 +244,10 @@ async def handle_request_joueur(reader, writer):
                 data = b"END"
                 await forward(writer, "END")
             else:
+                table_exists = False
                 for table in tables:
-                    if (
-                        table.get_name() == message.replace("NAME ", "")
-                        and table.get_is_start() == False
-                    ):
+                    if (table.get_name() == message.replace("NAME ", "") and table.get_is_start() == False):
+                        table_exists = True
                         table.add_player(current_player)
                         if table.get_is_waiting() == False:
                             print("démarrage ...")
@@ -242,7 +259,7 @@ async def handle_request_joueur(reader, writer):
                         await forward(
                             writer,
                             "Carte du donneur : "
-                            + table.get_dealer().get_deck()[0].to_string(),
+                            + table.get_dealer().get_deck()[0].to_string()
                         )
                         send_msg = 1
                         while send_msg == 1 and current_player.get_score() <= 21:
@@ -260,15 +277,32 @@ async def handle_request_joueur(reader, writer):
                                 else :
                                     send_msg = 0
                         await forward(current_player.get_writer(), "Score finale : "+ str(current_player.get_score()))
+                        if current_player.get_score() > 21:
+                            await forward(writer,"Vous avez perdu.")
                         table.increment_player_finished()
-                        while table.get_players_finished() != len(table.get_players()):
-                            await asyncio.sleep(10)
+                        while table.get_players_finished() < len(table.get_players()):
+                            await asyncio.sleep(1)
                             await forward(current_player.get_writer(), "En attente de la fin de la partie")
+                        while table.get_dealer().get_score() < 17:
+                            table.give_card(table.get_dealer(),1)
+                        if current_player.get_score() == table.get_dealer().get_score():
+                            await forward(current_player.get_writer(), "Égalité.")
+                        elif current_player.get_score() > table.get_dealer().get_score() or table.get_dealer().get_score() > 21:
+                            await forward(current_player.get_writer(), "Vous avez gagné")
+                        else:
+                            await forward(writer," Vous avez perdu.")
+                        await forward(current_player.get_writer(), "Cartes du donneur : "+ table.get_dealer().deck_to_string())
+                        await forward(current_player.get_writer(), "Score du donneur : "+ str(table.get_dealer().get_score()))
                         await forward(current_player.get_writer(), "Fin de la partie")
-                    else:
+                        if table in tables:
+                            tables.remove(table)
                         data = b"END"
                         await forward(writer, "END")
                         break
+                if table_exists == False:
+                    data = b"END"
+                    await forward(writer, "END")
+                    break
         # quit
         if message == "END":
             message = f"Player {addr} quit."
@@ -281,9 +315,6 @@ async def handle_request_joueur(reader, writer):
             
             writer.close()
             break
-
-        # print(message)
-        # await forward(writer, message)
 
 # Gestion croupiers
 async def handle_request_croupier(reader, writer):
@@ -324,6 +355,7 @@ async def handle_request_croupier(reader, writer):
             tables.append(table_temp)
             for table in tables:
                 print(table.get_name(), table.get_wait_time())
+            print(str(len(tables)))
 
         await forward(writer, "")
 
@@ -340,10 +372,6 @@ async def blackjack_server():
         await server_joueur.serve_forever()  # handle requests for ever
     async with server_croupier:
         await server_croupier.serve_forever()  # handle requests for ever
-    while True:
-        for table in tables:
-            if ( table.is_start() == True and len(table.get_players()) == 0 ) or table.is_end() == True:
-                tables.remove(table)
 
 
 if __name__ == "__main__":
